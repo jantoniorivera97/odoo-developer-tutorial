@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import fields, models, api
 from dateutil.relativedelta import relativedelta
 
 class EstateProperty(models.Model):
@@ -33,6 +33,29 @@ class EstateProperty(models.Model):
     tag_ids = fields.Many2many(comodel_name="estate.property.tags", string="Tags", required=True)
     offer_ids = fields.One2many(comodel_name="estate.property.offers", inverse_name="property_id", string="Offers")
 
+    # Computed fields
+    total_area = fields.Integer(compute="_compute_total_area", string="Total area (sqm)")
+    best_price = fields.Float(compute="_compute_best_offer", string="Best Offer")
+
+    @api.depends("living_area", "garden_area")
+    def _compute_total_area(self):
+        for record in self:
+            record.total_area = record.living_area + record.garden_area
+
+    @api.depends("offer_ids.price")
+    def _compute_best_offer(self):
+        for record in self:
+            record.best_price = max(record.mapped("offer_ids").mapped("price"))
+
+    @api.onchange("garden")
+    def _onchange_garden(self):
+        if self.garden is True:
+            self.garden_area = 10
+            self.garden_orientation = "North"
+        if self.garden is False:
+            self.garden_area = 0
+            self.garden_orientation = ""
+
 class EstatePropertyTypes(models.Model):
     _name = "estate.property.types"
     _description = "Estate property type"
@@ -54,3 +77,19 @@ class EstatePropertyOffers(models.Model):
     partner_id = fields.Many2one(comodel_name="res.partner", string="Buyer", required=True)
     property_id = fields.Many2one(comodel_name="estate.property")
 
+    create_date = fields.Date()
+    validity = fields.Integer(default=7, string="Validity (days)")
+    date_deadline = fields.Date(compute="_compute_date_deadline", inverse="_inverse_date_deadline", string="Deadline")
+
+    @api.depends("create_date", "validity")
+    def _compute_date_deadline(self):
+        for record in self:
+            # create_date is False when adding a new line, so we need to set the date for today or we'll have an Error
+            if record.create_date is False:
+                record.create_date = fields.Datetime.today()
+            record.date_deadline = record.create_date + relativedelta(days=record.validity)
+
+    @api.depends("create_date","validity")
+    def _inverse_date_deadline(self):
+        for record in self:
+            record.validity = (record.date_deadline - record.create_date).days
