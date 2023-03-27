@@ -25,3 +25,32 @@ class EstateProperty(models.Model):
                              selection=[('New', 'New'), ('Offer Received', 'Offer Received'),
                                         ('Offer Accepted', 'Offer Accepted'), ('Sold', 'Sold'),
                                         ('Cancelled', 'Cancelled')])
+
+    # Relations
+    property_type_id = fields.Many2one(comodel_name="estate.property.types", string="Property Type", required=True)
+    user_id = fields.Many2one(comodel_name="res.users", string="Salesperson", default=lambda self: self.env.user)
+    partner_id = fields.Many2one(comodel_name="res.partner", string="Buyer", copy=False)
+    tag_ids = fields.Many2many(comodel_name="estate.property.tags", string="Tags", required=True)
+    offer_ids = fields.One2many(comodel_name="estate.property.offers", inverse_name="property_id", string="Offers")
+
+class EstatePropertyTypes(models.Model):
+    _name = "estate.property.types"
+    _description = "Estate property type"
+
+    name = fields.Char()
+
+class EstatePropertyTags(models.Model):
+    _name = "estate.property.tags"
+    _description = "Estate property tags"
+
+    name = fields.Char()
+
+class EstatePropertyOffers(models.Model):
+    _name = "estate.property.offers"
+    _description = "Estate property offers"
+
+    price = fields.Float()
+    status = fields.Selection(copy=False, selection=[('Accepted', 'Accepted'), ('Refused', 'Refused')])
+    partner_id = fields.Many2one(comodel_name="res.partner", string="Buyer", required=True)
+    property_id = fields.Many2one(comodel_name="estate.property")
+
