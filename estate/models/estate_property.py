@@ -1,4 +1,4 @@
-from odoo import fields, models, api
+from odoo import fields, models, api, exceptions
 from dateutil.relativedelta import relativedelta
 
 class EstateProperty(models.Model):
@@ -21,7 +21,7 @@ class EstateProperty(models.Model):
     garden_orientation = fields.Selection(string='Garden Orientation',
         selection = [('North','North'),('South','South'),('West','West'),('East','East')])
     active = fields.Boolean(default = True)
-    state = fields.Selection(string="State", copy=False, default='New',
+    state = fields.Selection(string="Status", copy=False, default='New',
                              selection=[('New', 'New'), ('Offer Received', 'Offer Received'),
                                         ('Offer Accepted', 'Offer Accepted'), ('Sold', 'Sold'),
                                         ('Cancelled', 'Cancelled')])
@@ -36,6 +36,10 @@ class EstateProperty(models.Model):
     # Computed fields
     total_area = fields.Integer(compute="_compute_total_area", string="Total area (sqm)")
     best_price = fields.Float(compute="_compute_best_offer", string="Best Offer")
+
+    # Actions
+    sold_action = fields.Char()
+    cancel_action = fields.Char()
 
     @api.depends("living_area", "garden_area")
     def _compute_total_area(self):
@@ -58,6 +62,24 @@ class EstateProperty(models.Model):
         if self.garden is False:
             self.garden_area = 0
             self.garden_orientation = ""
+
+    def action_sold(self):
+        for record in self:
+            if record.sold_action and record.state == "Cancelled":
+                raise exceptions.UserError("Cancelled properties cannot be sold.")
+            else:
+                record.sold_action = "Sold"
+                record.state = "Sold"
+        return True
+
+    def action_cancel(self):
+        for record in self:
+            if record.sold_action and record.state == "Sold":
+                raise exceptions.UserError("Sold properties cannot be cancelled.")
+            else:
+                record.state = "Cancelled"
+                record.cancel_action = "Cancelled"
+        return True
 
 class EstatePropertyTypes(models.Model):
     _name = "estate.property.types"
@@ -96,3 +118,15 @@ class EstatePropertyOffers(models.Model):
     def _inverse_date_deadline(self):
         for record in self:
             record.validity = (record.date_deadline - record.create_date).days
+
+    def action_accept(self):
+        for record in self:
+            record.status = "Accepted"
+            record.property_id.selling_price = record.price
+            record.property_id.partner_id = record.partner_id
+        return True
+
+    def action_refuse(self):
+        for record in self:
+            record.status = "Refused"
+        return True
