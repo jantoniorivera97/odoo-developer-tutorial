@@ -20,7 +20,7 @@ class EstateProperty(models.Model):
     garden_area = fields.Integer(string='Garden Area (sqm)')
     garden_orientation = fields.Selection(string='Garden Orientation',
         selection = [('North','North'),('South','South'),('West','West'),('East','East')])
-    active = fields.Boolean()
+    active = fields.Boolean(default = True)
     state = fields.Selection(string="State", copy=False, default='New',
                              selection=[('New', 'New'), ('Offer Received', 'Offer Received'),
                                         ('Offer Accepted', 'Offer Accepted'), ('Sold', 'Sold'),
@@ -45,7 +45,10 @@ class EstateProperty(models.Model):
     @api.depends("offer_ids.price")
     def _compute_best_offer(self):
         for record in self:
-            record.best_price = max(record.mapped("offer_ids").mapped("price"))
+            if record.offer_ids:
+                record.best_price = max(record.mapped("offer_ids").mapped("price"))
+            else:
+                record.best_price = 0
 
     @api.onchange("garden")
     def _onchange_garden(self):
