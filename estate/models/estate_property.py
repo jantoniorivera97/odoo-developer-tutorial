@@ -81,17 +81,38 @@ class EstateProperty(models.Model):
                 record.cancel_action = "Cancelled"
         return True
 
+    # Constaints
+    _sql_constraints = [
+        ('positive_expected_price', 'CHECK(expected_price >= 0)', 'Expected price cannot be lower than 0'),
+        ('positive_selling_price', 'CHECK(selling_price >= 0)', 'Selling price cannot be lower than 0'),
+        ('positive_offer_price', 'CHECK(offer_ids.price >= 0)', 'Offer price cannot be lower than 0')
+    ]
+
+    @api.constrains('selling_price', 'expected_price')
+    def _check_selling_price(self):
+        for record in self:
+            if record.selling_price < record.expected_price * 0.9:
+                raise exceptions.ValidationError("The selling price cannot be lower than 90% of the expected price")
+
 class EstatePropertyTypes(models.Model):
     _name = "estate.property.types"
     _description = "Estate property type"
 
     name = fields.Char()
 
+    _sql_constraints = [
+        ('unique_property_type', 'UNIQUE(name)', 'Property type name must be unique')
+    ]
+
 class EstatePropertyTags(models.Model):
     _name = "estate.property.tags"
     _description = "Estate property tags"
 
     name = fields.Char()
+
+    _sql_constraints = [
+        ('unique_property_tag', 'UNIQUE(name)', 'Property tag name must be unique')
+    ]
 
 class EstatePropertyOffers(models.Model):
     _name = "estate.property.offers"
@@ -105,6 +126,10 @@ class EstatePropertyOffers(models.Model):
     create_date = fields.Date()
     validity = fields.Integer(default=7, string="Validity (days)")
     date_deadline = fields.Date(compute="_compute_date_deadline", inverse="_inverse_date_deadline", string="Deadline")
+
+    _sql_constraints = [
+        ('positive_offer_price', 'CHECK(price >= 0)', 'Offer price cannot be lower than 0')
+    ]
 
     @api.depends("create_date", "validity")
     def _compute_date_deadline(self):
