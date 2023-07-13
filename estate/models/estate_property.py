@@ -4,11 +4,12 @@ from dateutil.relativedelta import relativedelta
 class EstateProperty(models.Model):
     _name = "estate.property"
     _description = "Estate property"
+    _order = "id desc"
 
     name = fields.Char(required=True)
     description = fields.Text()
     postcode = fields.Char()
-    date_availability = fields.Date(string='Available From', copy=False,
+    date_availability = fields.Date(string='Available From', copy=False, required=False,
                                     default=fields.Datetime.today()+relativedelta(months=+3))
     expected_price = fields.Float(required=True)
     selling_price = fields.Float(readonly=True, copy=False)
@@ -91,24 +92,39 @@ class EstateProperty(models.Model):
     @api.constrains('selling_price', 'expected_price')
     def _check_selling_price(self):
         for record in self:
-            if record.selling_price < record.expected_price * 0.9:
-                raise exceptions.ValidationError("The selling price cannot be lower than 90% of the expected price")
+            if record.offer_ids:
+                if record.selling_price < record.expected_price * 0.9:
+                    raise exceptions.ValidationError("The selling price cannot be lower than 90% of the expected price")
 
 class EstatePropertyTypes(models.Model):
     _name = "estate.property.types"
     _description = "Estate property type"
+    _order = "name"
+    sequence = fields.Integer('Sequence', default=1)
 
     name = fields.Char()
+
+    property_ids = fields.One2many(comodel_name="estate.property", inverse_name="property_type_id")
+    offer_ids = fields.One2many(comodel_name="estate.property.offers", inverse_name="property_type_id")
+
+    offer_count = fields.Integer(compute="_compute_offer_count", string="Offers")
 
     _sql_constraints = [
         ('unique_property_type', 'UNIQUE(name)', 'Property type name must be unique')
     ]
 
+    @api.depends("offer_ids","property_ids")
+    def _compute_offer_count(self):
+        for record in self:
+            record.offer_count = len(record.offer_ids)
+
 class EstatePropertyTags(models.Model):
     _name = "estate.property.tags"
     _description = "Estate property tags"
+    _order = "name"
 
     name = fields.Char()
+    color = fields.Integer()
 
     _sql_constraints = [
         ('unique_property_tag', 'UNIQUE(name)', 'Property tag name must be unique')
@@ -117,11 +133,13 @@ class EstatePropertyTags(models.Model):
 class EstatePropertyOffers(models.Model):
     _name = "estate.property.offers"
     _description = "Estate property offers"
+    _order = "price desc"
 
     price = fields.Float()
     status = fields.Selection(copy=False, selection=[('Accepted', 'Accepted'), ('Refused', 'Refused')])
     partner_id = fields.Many2one(comodel_name="res.partner", string="Buyer", required=True)
     property_id = fields.Many2one(comodel_name="estate.property")
+    property_type_id =fields.Many2one(related="property_id.property_type_id")
 
     create_date = fields.Date()
     validity = fields.Integer(default=7, string="Validity (days)")
@@ -147,8 +165,8 @@ class EstatePropertyOffers(models.Model):
     def action_accept(self):
         for record in self:
             record.status = "Accepted"
-            record.property_id.selling_price = record.price
-            record.property_id.partner_id = record.partner_id
+            record.property_id.write({"selling_price":record.price, "partner_id":record.partner_id, "state":"Offer Accepted"})
+            record.property_id.offer_ids.filtered(lambda x: x.status is False).status = "Refused"
         return True
 
     def action_refuse(self):
