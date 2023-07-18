@@ -96,6 +96,12 @@ class EstateProperty(models.Model):
                 if record.selling_price < record.expected_price * 0.9:
                     raise exceptions.ValidationError("The selling price cannot be lower than 90% of the expected price")
 
+    @api.ondelete(at_uninstall=False)
+    def _delete_property(self):
+        for record in self:
+            if record.state != ("New","Cancelled"):
+                raise exceptions.ValidationError("Only new or cancelled properties can be deleted.")
+
 class EstatePropertyTypes(models.Model):
     _name = "estate.property.types"
     _description = "Estate property type"
@@ -173,3 +179,21 @@ class EstatePropertyOffers(models.Model):
         for record in self:
             record.status = "Refused"
         return True
+
+    @api.model
+    def create(self, vals):
+        property_id = self.env['estate_property'].browse(vals['property_id'])
+        property_id.status = "Offer Received"
+        self._check_new_offer()
+        return super().create(vals)
+
+    @api.constrains("price")
+    def _check_new_offer(self):
+        for record in self:
+            if record.price < record.property_id.best_price:
+                raise exceptions.UserError("Can't create an offer with a lower amount than an existing offer.")
+
+class Users(models.Model):
+    _inherit = "res.users"
+
+    property_ids = fields.One2many(comodel_name="estate.property", inverse_name="user_id")
