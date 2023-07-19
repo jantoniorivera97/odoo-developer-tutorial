@@ -33,6 +33,7 @@ class EstateProperty(models.Model):
     partner_id = fields.Many2one(comodel_name="res.partner", string="Buyer", copy=False)
     tag_ids = fields.Many2many(comodel_name="estate.property.tags", string="Tags", required=True)
     offer_ids = fields.One2many(comodel_name="estate.property.offers", inverse_name="property_id", string="Offers")
+    invoice_id = fields.Many2one(comodel_name="account.move", string="Invoice", readonly=True)
 
     # Computed fields
     total_area = fields.Integer(compute="_compute_total_area", string="Total area (sqm)")
@@ -182,8 +183,8 @@ class EstatePropertyOffers(models.Model):
 
     @api.model
     def create(self, vals):
-        property_id = self.env['estate_property'].browse(vals['property_id'])
-        property_id.status = "Offer Received"
+        property_id = self.env['estate.property'].browse(vals['property_id'])
+        property_id.state = "Offer Received"
         self._check_new_offer()
         return super().create(vals)
 
